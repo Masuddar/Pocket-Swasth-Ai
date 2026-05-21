@@ -6,6 +6,8 @@ import 'package:llamadart/llamadart.dart';
 import '../../models/user_profile.dart';
 import '../../core/constants/app_constants.dart';
 import '../../models/prescription.dart';
+import '../../services/storage/local_db_service.dart';
+import '../../models/medical_knowledge_update.dart';
 
 class ConditionInfo {
   final String title;
@@ -14,6 +16,7 @@ class ConditionInfo {
   final List<String> causes;
   final List<String> actions;
   final String doctorWhen;
+  final String? source; // Null for static, populated for synced updates
 
   const ConditionInfo({
     required this.title,
@@ -22,9 +25,9 @@ class ConditionInfo {
     required this.causes,
     required this.actions,
     required this.doctorWhen,
+    this.source,
   });
 }
-
 class OfflineLlmService {
   bool _isModelLoaded = false;
   LlamaService? _service;
@@ -278,12 +281,34 @@ class OfflineLlmService {
     }
 
     // ==========================================
-    // LAYER 2 & 3: 📊 SYMPTOM SCORING & 📚 DB MATCHING
+    // LAYER 2 & 3: 📊 SYMPTOM SCORING & 📚 DB MATCHING (WITH RAG SYNC UPDATES)
     // ==========================================
+    final LocalDbService db = LocalDbService();
+    final List<ConditionInfo> combinedDatabase = List<ConditionInfo>.from(_medicalDatabase);
+    try {
+      final synced = db.getKnowledgeUpdates();
+      if (synced.isNotEmpty) {
+        for (final s in synced) {
+          combinedDatabase.add(ConditionInfo(
+            title: s.title,
+            riskLevel: s.riskLevel,
+            keywords: s.keywords,
+            causes: s.causes,
+            actions: s.actions,
+            doctorWhen: s.doctorWhen,
+            source: s.source,
+          ));
+        }
+        print('OfflineLlmService: Successfully loaded ${synced.length} dynamic clinical updates into matcher.');
+      }
+    } catch (e) {
+      print('OfflineLlmService: Failed to fetch dynamic knowledge updates: $e');
+    }
+
     ConditionInfo? matchedCondition;
     int highestScore = 0;
 
-    for (final condition in _medicalDatabase) {
+    for (final condition in combinedDatabase) {
       int score = 0;
       for (final keyword in condition.keywords) {
         if (cleanInput.contains(keyword)) {
@@ -296,6 +321,10 @@ class OfflineLlmService {
       }
     }
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> ui-only
     // If no matching condition is found in the database, return a generic safe response
     if (matchedCondition == null || highestScore == 0) {
       print('OfflineLlmService Layer 3: No specific condition matched in local DB.');
@@ -331,10 +360,22 @@ class OfflineLlmService {
             ? savedPrescriptions.map((rx) => "${rx.diagnosis} (Medicines: ${rx.medicines.join(', ')})").join('; ')
             : 'None';
 
+        String dynamicContext = '';
+        if (matchedCondition.source != null) {
+          dynamicContext = 
+              "\n=== CLOUD-SYNCED CLINICAL MEMORY ACTIVE ===\n"
+              "This condition has been updated with the latest clinical developments from: ${matchedCondition.source}\n"
+              "Causes: ${matchedCondition.causes.join(', ')}\n"
+              "Actions: ${matchedCondition.actions.join(', ')}\n"
+              "Doctor When: ${matchedCondition.doctorWhen}\n"
+              "===========================================\n";
+        }
+
         final prompt = 
             "<|im_start|>system\n"
             "$sysPrompt\n"
             "Patient Medical Records Stored on Device: $rxBrief\n"
+            "$dynamicContext"
             "<|im_end|>\n"
             "<|im_start|>user\n"
             "Explain briefly: ${matchedCondition.title} caused by $symptoms\n"
@@ -450,8 +491,13 @@ class OfflineLlmService {
         ? "🟢 **SAFE (No need to worry)**" 
         : "🟡 **MODERATE (Monitor closely)**";
 
-    return """### 🏥 Supportive Triage: ${condition.title}
+    final String syncBadge = condition.source != null 
+        ? "\n> 🧠 **CLOUD-SYNCED OFFLINE KNOWLEDGE ACTIVE**\n> *This advice incorporates the latest medical procedures updated from: ${condition.source}*\n"
+        : "";
+
+    return """### 🏥 Supportive Triage: ${condition.title}$syncBadge
 Conclusion: $conclusion
+
 
 **1. 🩺 Doctor's Assessment:**
 $explanation

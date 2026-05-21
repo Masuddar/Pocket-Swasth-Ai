@@ -6,6 +6,7 @@ import 'providers/mode_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/health_provider.dart';
+import 'services/medical/medical_knowledge_sync_service.dart';
 import 'screens/main_shell_screen.dart';
 import 'routes/app_routes.dart';
 
@@ -31,6 +32,9 @@ void main() async {
         ),
         ChangeNotifierProvider<ChatProvider>(
           create: (_) => ChatProvider(),
+        ),
+        ChangeNotifierProvider<MedicalKnowledgeSyncService>(
+          create: (_) => MedicalKnowledgeSyncService(),
         ),
       ],
       child: const PocketSwasthApp(),

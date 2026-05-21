@@ -4,6 +4,7 @@ import '../../models/user_profile.dart';
 import '../../models/prescription.dart';
 import '../../models/diagnosis.dart';
 import '../../models/appointment.dart';
+import '../../models/medical_knowledge_update.dart';
 
 class LocalDbService {
   static const String _boxName = 'pocket_swasth_box';
@@ -131,5 +132,34 @@ class LocalDbService {
     final List<Map<String, dynamic>> rawList = current.map((a) => a.toMap()).toList();
     await _box.put('appointments', rawList);
   }
-}
 
+  // --- MEDICAL KNOWLEDGE SYNC STORAGE ---
+
+  Future<void> saveKnowledgeUpdates(List<MedicalKnowledgeUpdate> updates) async {
+    final List<Map<String, dynamic>> rawList = updates.map((u) => u.toMap()).toList();
+    await _box.put('knowledge_updates', rawList);
+  }
+
+  List<MedicalKnowledgeUpdate> getKnowledgeUpdates() {
+    final List<dynamic>? rawList = _box.get('knowledge_updates');
+    if (rawList == null) {
+      return [];
+    }
+    return rawList.map((item) => MedicalKnowledgeUpdate.fromMap(Map<dynamic, dynamic>.from(item))).toList();
+  }
+
+  Future<void> clearKnowledgeUpdates() async {
+    await _box.delete('knowledge_updates');
+    await _box.delete('last_knowledge_sync');
+  }
+
+  Future<void> saveLastSyncTime(DateTime time) async {
+    await _box.put('last_knowledge_sync', time.toIso8601String());
+  }
+
+  DateTime? getLastSyncTime() {
+    final String? raw = _box.get('last_knowledge_sync');
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
+  }
+}

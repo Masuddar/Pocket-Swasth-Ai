@@ -46,7 +46,7 @@ app.*.map.json
 # Ignore large model binaries
 *.gguf
 assets/models/
-models/
+/models/
 android/app/src/main/assets/models/
 
 # CocoaPods / Pods / iOS build files
